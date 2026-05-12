@@ -5,7 +5,7 @@ import numpy as np
 import json
 import os
 
-class BIM:
+class BIM_RSJ:
     def __init__(self, corpus, query, rel_ids):
         self.corpus = corpus
         self.query_terms = list(set(re.findall(r"\b\w+\b", query.lower())))
@@ -48,31 +48,6 @@ class BIM:
                 "score": round(s, 3)
             })
         return sorted(ranked_scores, key=lambda x: x["score"], reverse=True)
-    
-    def calculate_metrics(self, results, rel_ids, k=10):
-        rel_set = set(rel_ids)
-        if not rel_set or not results:
-            return 0.0, 0.0, 0.0, 0.0
-
-        ap = 0.0
-        hits = 0
-        dcg = 0.0
-
-        for i, res in enumerate(results[:k], 1):
-            if res['id'] in rel_set:
-                hits += 1
-                ap += hits/i
-                dcg += 1/np.log2(i + 1)
-
-        ap/=len(rel_set) 
-
-        p_at_k = hits/k
-        recall_at_k = hits/len(rel_set)
-
-        idcg = sum(1 / np.log2(i+1) for i in range(1, min(len(rel_set), k) + 1))
-        ndcg = dcg / idcg if idcg > 0 else 0.0
-
-        return ap, p_at_k, recall_at_k, ndcg
         
 if __name__ == "__main__":
     raw_docs = dataset_utils.import_dataset('..\\data\\docs.json')
@@ -89,19 +64,10 @@ if __name__ == "__main__":
     current_qrels = qrels_dict.get(query_id, {})
     rel_ids = [d_id for d_id, val in current_qrels.items() if val == 1]
 
-    bim = BIM(raw_docs, query_text, rel_ids)
+    bim = BIM_RSJ(raw_docs, query_text, rel_ids)
     results = bim.rank()
 
-    ap, p10, r10, ndcg = bim.calculate_metrics(results, rel_ids, k=10)
-
     print("-" * 50)
-    print(f"Metrics for #{query_id}:")
-    print(f"Precision@10: {p10:.3f}")
-    print(f"Recall@10: {r10:.3f}")
-    print(f"Avg Precision: {ap:.3f}")
-    print(f"nDCG: {ndcg:.3f}")
-    print("-" * 50)
-
     print(f"Query #{query_id}: {query_text}")
     print(f"Total relevant documents in database: {len(rel_ids)}")
     print("-" * 50)
@@ -112,4 +78,8 @@ if __name__ == "__main__":
         doc_id = res['id']
         status = "Is Relevant" if doc_id in rel_ids else "Not Relevant"
         print(f"{i:<5} | {status:<15} | {doc_id:<8} | {res['score']}")
+
+    ap, p10, r10, ndcg = dataset_utils.calculate_metrics(results, rel_ids, k=10)
+    print("-" * 65)
+    print(f"P@k: {p10:.3f} | R@k: {r10:.3f} | nDCG: {ndcg:.3f} | AP: {ap:.3f}")
 
